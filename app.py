@@ -1,72 +1,154 @@
 from flask import Flask, request, jsonify
-from flask_cors import CORS
+from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
-import psycopg2
-import os
+import jwt
+import datetime
+from functools import wraps
 
+# Tạo ứng dụng Flask
 app = Flask(__name__)
-CORS(app)
 
-# Cấu hình ứng dụng
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///data.db')  # Database mặc định SQLite
+# Cấu hình cơ sở dữ liệu
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///shop.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'your-secret-key')
+app.config['SECRET_KEY'] = 'your_secret_key'
 
-# Khởi tạo cơ sở dữ liệu và JWT
 db = SQLAlchemy(app)
-jwt = JWTManager(app)
 
-# Sản phẩm mẫu
-products = [
-    {"id": 1, "name": "Áo thun nam", "price": 120000, "image": "https://th.bing.com/th/id/OIP._cFXyvl6CYFMo1QRizPoSgHaKs?rs=1&pid=ImgDetMain"},
-    {"id": 2, "name": "Quần jeans nữ", "price": 350000, "image": "https://cf.shopee.vn/file/a7624da479e934e6776218d26135f4d0"},
-    {"id": 3, "name": "Giày thể thao", "price": 600000, "image": "https://salt.tikicdn.com/ts/tmp/72/99/3d/6b8c1b6cc9094dc866dcbefab72fc9cc.jpg"},
-    {"id": 4, "name": "Túi xách", "price": 450000, "image": "https://thuthuatnhanh.com/wp-content/uploads/2022/05/Mau-tui-xach-nu-dep-gia-re.jpg"}
-]
+# ------------------------
+# Mô hình cơ sở dữ liệu
+# ------------------------
 
-# Model quản lý User
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
-    password = db.Column(db.String(120), nullable=False)
+    username = db.Column(db.String(50), unique=True, nullable=False)
+    password = db.Column(db.String(200), nullable=False)
 
-# Tạo bảng dữ liệu
+class Product(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    price = db.Column(db.Float, nullable=False)
+    image = db.Column(db.String(200), nullable=True)
+
+# ------------------------
+# Middleware kiểm tra Token
+# ------------------------
+
+def token_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = request.headers.get('Authorization')
+        if token:
+            token = token.replace('Bearer ', '')  # Loại bỏ chữ "Bearer "
+        else:
+            return jsonify({'message': 'Token is missing!'}), 401
+
+        try:
+            data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=["HS256"])
+            current_user = User.query.filter_by(id=data['user_id']).first()
+        except Exception as e:
+            return jsonify({'message': 'Token is invalid!', 'error': str(e)}), 401
+
+        return f(current_user, *args, **kwargs)
+    return decorated
+
+# ------------------------
+# API đăng ký
+# ------------------------
+
+@app.route('/api/register', methods=['POST'])
+def register():
+    data = request.get_json()
+    username = data.get('username')
+    password = data.get('password')
+
+    if not username or not password:
+        return jsonify({'message': 'Vui lòng nhập đầy đủ tên đăng nhập và mật khẩu!'}), 400
+
+    if User.query.filter_by(username=username).first():
+        return jsonify({'message': 'Tên đăng nhập đã tồn tại!'}), 409
+
+    hashed_password = generate_password_hash(password, method='sha256')
+    new_user = User(username=username, password=hashed_password)
+    db.session.add(new_user)
+    db.session.commit()
+
+    return jsonify({'message': 'Đăng ký thành công!'}), 201
+
+# ------------------------
+# API đăng nhập
+# ------------------------
+
+@app.route('/api/login', methods=['POST'])
+def login():
+    data = request.get_json()
+    username = data.get('username')
+    password = data.get('password')
+
+    if not username or not password:
+        return jsonify({'message': 'Vui lòng nhập đầy đủ tên đăng nhập và mật khẩu!'}), 400
+
+    user = User.query.filter_by(username=username).first()
+    if not user or not check_password_hash(user.password, password):
+        return jsonify({'message': 'Tên đăng nhập hoặc mật khẩu không đúng!'}), 401
+
+    token = jwt.encode({
+        'user_id': user.id,
+        'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)  # Token hết hạn sau 24 giờ
+    }, app.config['SECRET_KEY'], algorithm="HS256")
+
+    return jsonify({'token': token})
+
+# ------------------------
+# API lấy danh sách sản phẩm
+# ------------------------
+
+@app.route('/api/products', methods=['GET'])
+def get_products():
+    products = Product.query.all()
+    product_list = [{
+        'id': product.id,
+        'name': product.name,
+        'price': product.price,
+        'image': product.image
+    } for product in products]
+
+    return jsonify(product_list)
+
+# ------------------------
+# API lấy giỏ hàng (ví dụ)
+# ------------------------
+
+@app.route('/api/cart', methods=['GET'])
+@token_required
+def get_cart(current_user):
+    # Ví dụ giỏ hàng tĩnh
+    cart_items = [
+        {'id': 1, 'name': 'Product A', 'price': 100000, 'image': 'product_a.jpg'},
+        {'id': 2, 'name': 'Product B', 'price': 200000, 'image': 'product_b.jpg'},
+    ]
+    return jsonify(cart_items)
+
+# ------------------------
+# Khởi tạo cơ sở dữ liệu (lần đầu chạy)
+# ------------------------
+
 @app.before_first_request
 def create_tables():
     db.create_all()
+    # Thêm sản phẩm mẫu (chỉ chạy một lần)
+    if not Product.query.first():
+        sample_products = [
+            Product(name='Áo Thun', price=150000, image='https://example.com/ao-thun.jpg'),
+            Product(name='Quần Jean', price=350000, image='https://example.com/quan-jean.jpg'),
+            Product(name='Giày Sneaker', price=1200000, image='https://example.com/giay-sneaker.jpg'),
+        ]
+        db.session.add_all(sample_products)
+        db.session.commit()
 
-# Endpoint lấy danh sách sản phẩm
-@app.route('/api/products', methods=['GET'])
-def get_products():
-    return jsonify(products)
-
-# Endpoint đăng ký
-@app.route('/api/register', methods=['POST'])
-def register():
-    data = request.json
-    if User.query.filter_by(username=data['username']).first():
-        return jsonify({'message': 'Tài khoản đã tồn tại'}), 400
-    user = User(username=data['username'], password=data['password'])
-    db.session.add(user)
-    db.session.commit()
-    return jsonify({'message': 'Tài khoản đã được tạo'})
-
-# Endpoint đăng nhập
-@app.route('/api/login', methods=['POST'])
-def login():
-    data = request.json
-    user = User.query.filter_by(username=data['username'], password=data['password']).first()
-    if not user:
-        return jsonify({'message': 'Tên đăng nhập hoặc mật khẩu không chính xác'}), 401
-    access_token = create_access_token(identity={'username': user.username})
-    return jsonify(access_token=access_token)
-
-# Endpoint bảo vệ (yêu cầu đăng nhập)
-@app.route('/api/protected', methods=['GET'])
-@jwt_required()
-def protected():
-    return jsonify({'message': 'Bạn đã truy cập thành công vào endpoint bảo vệ'})
+# ------------------------
+# Chạy ứng dụng
+# ------------------------
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port)
+    app.run(debug=True)
