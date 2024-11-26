@@ -4,14 +4,15 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import jwt
 import datetime
 from functools import wraps
+import os
 
 # Tạo ứng dụng Flask
 app = Flask(__name__)
 
-# Cấu hình cơ sở dữ liệu
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///shop.db'
+# Cấu hình cơ sở dữ liệu từ Railway (hoặc SQLite nếu chạy local)
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///shop.db').replace('postgres://', 'postgresql://')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SECRET_KEY'] = 'your_secret_key'
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'your_secret_key')
 
 db = SQLAlchemy(app)
 
@@ -130,25 +131,26 @@ def get_cart(current_user):
     return jsonify(cart_items)
 
 # ------------------------
-# Khởi tạo cơ sở dữ liệu (lần đầu chạy)
+# Khởi tạo cơ sở dữ liệu
 # ------------------------
 
-@app.before_first_request
+@app.before_request
 def create_tables():
-    db.create_all()
-    # Thêm sản phẩm mẫu (chỉ chạy một lần)
-    if not Product.query.first():
-        sample_products = [
-            Product(name='Áo Thun', price=150000, image='https://example.com/ao-thun.jpg'),
-            Product(name='Quần Jean', price=350000, image='https://example.com/quan-jean.jpg'),
-            Product(name='Giày Sneaker', price=1200000, image='https://example.com/giay-sneaker.jpg'),
-        ]
-        db.session.add_all(sample_products)
-        db.session.commit()
+    with app.app_context():
+        db.create_all()
+        # Thêm sản phẩm mẫu (chỉ chạy một lần)
+        if not Product.query.first():
+            sample_products = [
+                Product(name='Áo Thun', price=150000, image='https://example.com/ao-thun.jpg'),
+                Product(name='Quần Jean', price=350000, image='https://example.com/quan-jean.jpg'),
+                Product(name='Giày Sneaker', price=1200000, image='https://example.com/giay-sneaker.jpg'),
+            ]
+            db.session.add_all(sample_products)
+            db.session.commit()
 
 # ------------------------
 # Chạy ứng dụng
 # ------------------------
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, host='0.0.0.0', port=int(os.getenv('PORT', 5000)))
