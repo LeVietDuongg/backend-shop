@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 import jwt as PyJWT
+
 import datetime
 from functools import wraps
 import os
@@ -9,18 +10,12 @@ import os
 # Tạo ứng dụng Flask
 app = Flask(__name__)
 
-# Cấu hình cơ sở dữ liệu PostgreSQL từ Railway
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv(
-    'DATABASE_URL', 
-    'postgresql://postgres:fkyDVVtzJqBKsKaKQpHcxRiVoZAHeFDP@junction.proxy.rlwy.net:18710/railway'
-)
+# Cấu hình cơ sở dữ liệu từ Railway (hoặc SQLite nếu chạy local)
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///shop.db').replace('postgres://', 'postgresql://')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'your_secret_key')
 
 db = SQLAlchemy(app)
-
-
-
 
 # ------------------------
 # Mô hình cơ sở dữ liệu
