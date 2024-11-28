@@ -2,20 +2,27 @@ from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 import jwt as PyJWT
-
 import datetime
 from functools import wraps
 import os
+import pymysql  # Thêm thư viện
+pymysql.install_as_MySQLdb()  # Sử dụng PyMySQL thay thế MySQLdb
 
 # Tạo ứng dụng Flask
 app = Flask(__name__)
 
-# Cấu hình cơ sở dữ liệu từ Railway (hoặc SQLite nếu chạy local)
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('postgresql://postgres:fkyDVVtzJqBKsKaKQpHcxRiVoZAHeFDP@postgres.railway.internal:5432/railway')
+# Cấu hình cơ sở dữ liệu từ Railway
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv(
+    'DATABASE_URL',
+    'mysql://root:aLwOoKTFJZhjZBzXKwokLvQFdrBKPZYQ@junction.proxy.rlwy.net:57235/railway'
+)
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['JWT_SECRETKEY'] = os.getenv('JWT_SECRETKEY', 'mysecretkey')
 
 db = SQLAlchemy(app)
+
+# (Phần còn lại của mã không thay đổi, đã đưa trong đoạn mã trước)
+
 
 # ------------------------
 # Mô hình cơ sở dữ liệu
@@ -46,7 +53,7 @@ def token_required(f):
             return jsonify({'message': 'Token is missing!'}), 401
 
         try:
-            data = PyJWT.decode(token, app.config['SECRET_KEY'], algorithms=["HS256"])
+            data = PyJWT.decode(token, app.config['JWT_SECRETKEY'], algorithms=["HS256"])
             current_user = User.query.filter_by(id=data['user_id']).first()
         except Exception as e:
             return jsonify({'message': 'Token is invalid!', 'error': str(e)}), 401
@@ -97,7 +104,7 @@ def login():
     token = PyJWT.encode({
         'user_id': user.id,
         'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)  # Token hết hạn sau 24 giờ
-    }, app.config['SECRET_KEY'], algorithm="HS256")
+    }, app.config['JWT_SECRETKEY'], algorithm="HS256")
 
     return jsonify({'token': token})
 
@@ -132,14 +139,13 @@ def get_cart(current_user):
     return jsonify(cart_items)
 
 # ------------------------
-# Khởi tạo cơ sở dữ liệu
+# Hàm khởi tạo cơ sở dữ liệu
 # ------------------------
 
-@app.before_request
 def create_tables():
     with app.app_context():
         db.create_all()
-        # Thêm sản phẩm mẫu (chỉ chạy một lần)
+        # Thêm sản phẩm mẫu nếu chưa có
         if not Product.query.first():
             sample_products = [
                 Product(name='Áo Thun', price=150000, image='https://example.com/ao-thun.jpg'),
@@ -154,4 +160,6 @@ def create_tables():
 # ------------------------
 
 if __name__ == '__main__':
+    # Gọi hàm tạo bảng trước khi khởi động ứng dụng
+    create_tables()
     app.run(debug=True, host='0.0.0.0', port=int(os.getenv('PORT', 5000)))
