@@ -2,27 +2,23 @@ from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 import jwt as PyJWT
+
 import datetime
 from functools import wraps
 import os
-import pymysql  # Thêm thư viện
-pymysql.install_as_MySQLdb()  # Sử dụng PyMySQL thay thế MySQLdb
 
 # Tạo ứng dụng Flask
 app = Flask(__name__)
 
-# Cấu hình cơ sở dữ liệu từ Railway
+# Cấu hình cơ sở dữ liệu từ Railway (MySQL)
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv(
     'DATABASE_URL',
-    'mysql://root:aLwOoKTFJZhjZBzXKwokLvQFdrBKPZYQ@junction.proxy.rlwy.net:57235/railway'
+    'mysql+pymysql://root:aLwOoKTFJZhjZBzXKwokLvQFdrBKPZYQ@junction.proxy.rlwy.net:57235/railway'
 )
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['JWT_SECRETKEY'] = os.getenv('JWT_SECRETKEY', 'mysecretkey')
+app.config['SECRET_KEY'] = os.getenv('JWT_SECRETKEY', 'mysecretkey')
 
 db = SQLAlchemy(app)
-
-# (Phần còn lại của mã không thay đổi, đã đưa trong đoạn mã trước)
-
 
 # ------------------------
 # Mô hình cơ sở dữ liệu
@@ -53,7 +49,7 @@ def token_required(f):
             return jsonify({'message': 'Token is missing!'}), 401
 
         try:
-            data = PyJWT.decode(token, app.config['JWT_SECRETKEY'], algorithms=["HS256"])
+            data = PyJWT.decode(token, app.config['SECRET_KEY'], algorithms=["HS256"])
             current_user = User.query.filter_by(id=data['user_id']).first()
         except Exception as e:
             return jsonify({'message': 'Token is invalid!', 'error': str(e)}), 401
@@ -104,7 +100,7 @@ def login():
     token = PyJWT.encode({
         'user_id': user.id,
         'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)  # Token hết hạn sau 24 giờ
-    }, app.config['JWT_SECRETKEY'], algorithm="HS256")
+    }, app.config['SECRET_KEY'], algorithm="HS256")
 
     return jsonify({'token': token})
 
@@ -125,23 +121,10 @@ def get_products():
     return jsonify(product_list)
 
 # ------------------------
-# API lấy giỏ hàng (ví dụ)
+# Khởi tạo cơ sở dữ liệu
 # ------------------------
 
-@app.route('/api/cart', methods=['GET'])
-@token_required
-def get_cart(current_user):
-    # Ví dụ giỏ hàng tĩnh
-    cart_items = [
-        {'id': 1, 'name': 'Product A', 'price': 100000, 'image': 'product_a.jpg'},
-        {'id': 2, 'name': 'Product B', 'price': 200000, 'image': 'product_b.jpg'},
-    ]
-    return jsonify(cart_items)
-
-# ------------------------
-# Hàm khởi tạo cơ sở dữ liệu
-# ------------------------
-
+@app.before_request
 def create_tables():
     with app.app_context():
         db.create_all()
@@ -155,11 +138,11 @@ def create_tables():
             db.session.add_all(sample_products)
             db.session.commit()
 
-# ------------------------
-# Chạy ứng dụng
-# ------------------------
-
 if __name__ == '__main__':
     # Gọi hàm tạo bảng trước khi khởi động ứng dụng
     create_tables()
     app.run(debug=True, host='0.0.0.0', port=int(os.getenv('PORT', 5000)))
+
+# ------------------------
+# Chạy ứng dụng
+# -----------------------
