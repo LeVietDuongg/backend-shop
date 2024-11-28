@@ -46,7 +46,7 @@ def token_required(f):
             return jsonify({'message': 'Token is missing!'}), 401
 
         try:
-            data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=["HS256"])
+            data = PyJWT.decode(token, app.config['SECRET_KEY'], algorithms=["HS256"])
             current_user = User.query.filter_by(id=data['user_id']).first()
         except Exception as e:
             return jsonify({'message': 'Token is invalid!', 'error': str(e)}), 401
@@ -94,7 +94,7 @@ def login():
     if not user or not check_password_hash(user.password, password):
         return jsonify({'message': 'Tên đăng nhập hoặc mật khẩu không đúng!'}), 401
 
-    token = jwt.encode({
+    token = PyJWT.encode({
         'user_id': user.id,
         'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)  # Token hết hạn sau 24 giờ
     }, app.config['SECRET_KEY'], algorithm="HS256")
