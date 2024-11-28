@@ -11,9 +11,9 @@ import os
 app = Flask(__name__)
 
 # Cấu hình cơ sở dữ liệu từ Railway (hoặc SQLite nếu chạy local)
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///shop.db').replace('postgres://', 'postgresql://')
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('postgresql://postgres:fkyDVVtzJqBKsKaKQpHcxRiVoZAHeFDP@postgres.railway.internal:5432/railway')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'your_secret_key')
+app.config['JWT_SECRETKEY'] = os.getenv('JWT_SECRETKEY', 'mysecretkey')
 
 db = SQLAlchemy(app)
 
