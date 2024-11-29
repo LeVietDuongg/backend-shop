@@ -2,12 +2,10 @@ from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 import jwt as PyJWT
-
 import datetime
 from functools import wraps
 import os
 
-# Tạo ứng dụng Flask
 app = Flask(__name__)
 
 # Cấu hình cơ sở dữ liệu từ Railway (MySQL)
@@ -128,7 +126,6 @@ def get_products():
 def create_tables():
     with app.app_context():
         db.create_all()
-        # Thêm sản phẩm mẫu nếu chưa có
         if not Product.query.first():
             sample_products = [
                 Product(name='Áo Thun', price=150000, image='https://example.com/ao-thun.jpg'),
@@ -139,10 +136,5 @@ def create_tables():
             db.session.commit()
 
 if __name__ == '__main__':
-    # Gọi hàm tạo bảng trước khi khởi động ứng dụng
     create_tables()
     app.run(debug=True, host='0.0.0.0', port=int(os.getenv('PORT', 5000)))
-
-# ------------------------
-# Chạy ứng dụng
-# -----------------------
