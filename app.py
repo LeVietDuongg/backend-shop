@@ -2,53 +2,41 @@ from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 import jwt as PyJWT
-
 import datetime
 from functools import wraps
-import os
 
 # Tạo ứng dụng Flask
 app = Flask(__name__)
 
-# Cấu hình cơ sở dữ liệu từ Railway (MySQL)
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv(
-    'DATABASE_URL',
-    'mysql+pymysql://root:aLwOoKTFJZhjZBzXKwokLvQFdrBKPZYQ@junction.proxy.rlwy.net:57235/railway'
-)
+# Cấu hình cơ sở dữ liệu (MySQL)
+app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:aLwOoKTFJZhjZBzXKwokLvQFdrBKPZYQ@junction.proxy.rlwy.net:57235/railway'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SECRET_KEY'] = os.getenv('JWT_SECRETKEY', 'mysecretkey')
+
+# Khóa bí mật để mã hóa JWT
+app.config['SECRET_KEY'] = 'mysecretkey'
 
 db = SQLAlchemy(app)
 
-# ------------------------
 # Mô hình cơ sở dữ liệu
-# ------------------------
-
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(50), unique=True, nullable=False)
     password = db.Column(db.String(200), nullable=False)
-    last_login = db.Column(db.DateTime, nullable=True)
+    last_login = db.Column(db.DateTime, nullable=True, default=None)
 
-# Cập nhật last_login khi đăng nhập thành công
-User.last_login = datetime.datetime.utcnow()
-db.session.commit()
 class Product(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     price = db.Column(db.Float, nullable=False)
     image = db.Column(db.String(200), nullable=True)
 
-# ------------------------
 # Middleware kiểm tra Token
-# ------------------------
-
 def token_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         token = request.headers.get('Authorization')
         if token:
-            token = token.replace('Bearer ', '')  # Loại bỏ chữ "Bearer "
+            token = token.replace('Bearer ', '')
         else:
             return jsonify({'message': 'Token is missing!'}), 401
 
@@ -61,10 +49,7 @@ def token_required(f):
         return f(current_user, *args, **kwargs)
     return decorated
 
-# ------------------------
 # API đăng ký
-# ------------------------
-
 @app.route('/api/register', methods=['POST'])
 def register():
     data = request.get_json()
@@ -84,10 +69,7 @@ def register():
 
     return jsonify({'message': 'Đăng ký thành công!'}), 201
 
-# ------------------------
 # API đăng nhập
-# ------------------------
-
 @app.route('/api/login', methods=['POST'])
 def login():
     data = request.get_json()
@@ -101,6 +83,10 @@ def login():
     if not user or not check_password_hash(user.password, password):
         return jsonify({'message': 'Tên đăng nhập hoặc mật khẩu không đúng!'}), 401
 
+    # Cập nhật last_login
+    user.last_login = datetime.datetime.utcnow()
+    db.session.commit()
+
     token = PyJWT.encode({
         'user_id': user.id,
         'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)  # Token hết hạn sau 24 giờ
@@ -108,10 +94,7 @@ def login():
 
     return jsonify({'token': token})
 
-# ------------------------
 # API lấy danh sách sản phẩm
-# ------------------------
-
 @app.route('/api/products', methods=['GET'])
 def get_products():
     products = Product.query.all()
@@ -124,12 +107,7 @@ def get_products():
 
     return jsonify(product_list)
 
-# ------------------------
-# Khởi tạo cơ sở dữ liệu
-# ------------------------
-
-@app.before_request
-def create_tables():
+if __name__ == '__main__':
     with app.app_context():
         db.create_all()
         # Thêm sản phẩm mẫu nếu chưa có
@@ -142,11 +120,4 @@ def create_tables():
             db.session.add_all(sample_products)
             db.session.commit()
 
-if __name__ == '__main__':
-    # Gọi hàm tạo bảng trước khi khởi động ứng dụng
-    create_tables()
-    app.run(debug=True, host='0.0.0.0', port=int(os.getenv('PORT', 5000)))
-
-# ------------------------
-# Chạy ứng dụng
-# -----------------------
+    app.run(debug=True, host='0.0.0.0', port=5000)
