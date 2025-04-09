@@ -1,23 +1,18 @@
 {
   "name": "backend-shop",
   "version": "1.0.0",
-  "description": "A Socket.IO server for handling real-time messaging and user status management.",
-  "main": "src/socket-server.js",
+  "description": "Socket.IO server for chat functionality",
+  "main": "socket-server.js",
   "scripts": {
-    "start": "node src/socket-server.js",
-    "dev": "nodemon src/socket-server.js"
+    "start": "node socket-server.js"
   },
   "dependencies": {
-    "cors": "^2.8.5",
-    "express": "^4.17.1",
-    "jsonwebtoken": "^8.5.1",
-    "socket.io": "^4.0.0"
-  },
-  "devDependencies": {
-    "nodemon": "^2.0.7"
+    "express": "^4.18.2",
+    "socket.io": "^4.7.2",
+    "jsonwebtoken": "^9.0.2",
+    "cors": "^2.8.5"
   },
   "engines": {
-    "node": ">=14.x"
-  },
-  "license": "MIT"
+    "node": ">=14.0.0"
+  }
 }
